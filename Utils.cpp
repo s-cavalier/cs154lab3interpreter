@@ -90,6 +90,18 @@ WORD Parser::instr_to_hex(token_string& instr, const unordered_map<string, WORD>
         rs = reg_name_to_index( instr[2].substr(end_of_imm + 1, end_of_string - end_of_imm - 1) );
         return build_i_type(opcode, rs, rt, imm);
     }
+
+    if (opcode == 0xf) {
+        Utils::assert(instr[1].back() == ',', "Missing comma:\n" + instr[0] + " " + instr[1]);
+        instr[1].pop_back();
+        rt = reg_name_to_index(instr[1]);
+
+        int immediate_val = stoi( instr[2] );
+        Utils::assert(immediate_val <= 32767 && immediate_val >= -32768, "BEQ immediate value out of range (your program too big) [-32768, 32767]:\n" + instr[3] + " => " + to_string(immediate_val));
+        imm = static_cast<short>(immediate_val);
+        return build_i_type(opcode, rs, rt, imm);
+    }
+
     if (!opcode) {
         Utils::assert(instr[1].back() == ',', "Missing comma:\n" + instr[0] + " " + instr[1]);
         instr[1].pop_back();
@@ -108,8 +120,8 @@ WORD Parser::instr_to_hex(token_string& instr, const unordered_map<string, WORD>
     Utils::assert(instr[2].back() == ',', "Missing comma:\n" + instr[0] + " " + instr[1] + " " + instr[2]);
     instr[2].pop_back();
 
-    rs = reg_name_to_index(instr[1]);
-    rt = reg_name_to_index(instr[2]);
+    rt = reg_name_to_index(instr[1]);
+    rs = reg_name_to_index(instr[2]);
 
     int immediate_val = 0;
     if (opcode == 4) immediate_val = label_table.at(instr[3]) - tmp_pc - 1;

@@ -14,7 +14,7 @@ using namespace Utils; // Only use namespace utils, since these should be global
 int main(int argc, char** argv) {
 
     // Check for valid input
-    assert(argc > 1, "USAGE: ./interpret <MIPS src> <output file>");
+    assert(argc == 4, "USAGE: ./interpret <MIPS src> <compile output> <memory output>");
 
     // First is to compile into both internal memory and pyrtl CPU mem
 
@@ -59,9 +59,8 @@ int main(int argc, char** argv) {
 
     Hardware::RAM mem;
 
-
-    assert(seen_labels.size() == 1, "Reading labels with no instructions after them. Check:\n" + seen_labels.front() + ':');
-    assert(seen_labels[0] == "exit", "No 'exit:' label found. Please make an 'exit:' label and jump to the label with beq to exit the program.\nWhen the label is called, the program will end, so no code after will be executed. It is effectively the same as exiting with syscall.");
+    assert(seen_labels.size() < 2, "Reading labels with no instructions after them. Check:\n" + seen_labels.front() + ':');
+    if (seen_labels.size() == 1) assert(seen_labels[0] == "exit", "No 'exit:' label found. Please make an 'exit:' label and jump to the label with beq to exit the program.\nWhen the label is called, the program will end, so no code after will be executed. It is effectively the same as exiting with syscall.");
 
     // Artifically add an extra instruction at the end of the program so the Python CPU closes
     label_table["exit"] = tmp_pc;
@@ -89,13 +88,29 @@ int main(int argc, char** argv) {
 
         WORD instr = Parser::instr_to_hex(tokens, label_table, tmp_pc);
 
+        mem.i_mem.push_back(Hardware::instruction_builder(mem, instr));
         output_file << setw(8) << setfill('0') << instr << '\n';
         ++tmp_pc;
     }
 
+    // Add exit
     Parser::token_string extra_instruction = {"beq", "$zero,", "$zero,", "exit"};
+    mem.i_mem.push_back(Hardware::instruction_builder(mem, 0xC)); // "exit syscall"
     output_file << setw(8) << setfill('0') << Parser::instr_to_hex(extra_instruction, label_table, tmp_pc);
     
+    while (!mem.exit_flag) {
+        mem.i_mem.at(mem.pc).compiled(mem);
+        ++mem.pc;
+    }
+
+    ofstream memory_output(argv[3]);
+    assert (memory_output.good(), "Failed to open " + string(argv[3]) + ".");
+
+    for (int i = 0; i < 31; ++i) memory_output << mem.rf[i] << ',';
+    memory_output << mem.rf[31] << '\n';
+    for (const auto& kv : mem.d_mem) {
+        memory_output << kv.first << '=' << kv.second << ',';
+    }
 
     return 0;
 }
